@@ -1,6 +1,19 @@
 # LatentMind
 
-Semantic long-term memory for Claude Code. Every conversation is automatically stored and searchable across sessions using Latent Semantic Analysis (LSA) — no external embedding API required.
+Semantic long-term memory for Claude Code. Every conversation is automatically stored and searchable across sessions using Latent Semantic Analysis (LSA) — no external embedding API required. 
+
+## Motivation and architecture
+
+Large language models suffer from early dementia: they can’t accurately remember what you’ve discussed with them, causing wrong answers and bad results for tasks they are doing. For example, in software development, they can forget important development and architecture decisions. For many agentic tasks, LLM requires proper knowledge and context. 
+
+This is an experimental project to explore whether traditional or antique text-mining and information-retrieval methods can serve as a memory for AI agents. 
+
+The system is built on two technologies: LSA (Latent Semantic Analysis), which handles all the math, and a storage layer built with ChromaDB. 
+
+The key design decision: ChromaDB handles persistence and ANN search; LSA handles semantics. ChromaDB's own embedding model is bypassed and LatentMind injects its own vectors.
+
+Refitting is necessary because LSA is a global decomposition — when new documents arrive, the latent space shifts. Every refit_every document, the model is retrained, and all stored vectors are updated in-place.
+
 
 ## How it works
 
