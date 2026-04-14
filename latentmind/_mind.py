@@ -1,64 +1,16 @@
-import numpy as np
-import chromadb
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.decomposition import TruncatedSVD
-from sklearn.preprocessing import normalize
+"""LatentMind: orchestrates LSA model and ChromaDB collection."""
+
 from pathlib import Path
 
-LATENTMIND_DIR = Path(".latentmind")  # all persistence lives here
-K           = 8                       # latent dimensions
-REFIT_EVERY = 20                      # refit LSA after this many new memories
+from ._lsa import LSAModel
+from ._store import get_chroma_collection, LATENTMIND_DIR
 
-# ---------------------------------------------------------------------------
-# ChromaDB  —  we manage embeddings ourselves so no embedding_function needed
-# ---------------------------------------------------------------------------
-
-def get_chroma_collection(persist_dir: Path) -> chromadb.Collection:
-    persist_dir.mkdir(parents=True, exist_ok=True)
-    client = chromadb.PersistentClient(path=str(persist_dir))
-    return client.get_or_create_collection(
-        name="memories",
-        metadata={"hnsw:space": "cosine"},
-    )
-
-# ---------------------------------------------------------------------------
-# LSA model
-# ---------------------------------------------------------------------------
-
-class LSAModel:
-    def __init__(self, n_components: int = K):
-        self.n_components = n_components
-        self.tfidf  = TfidfVectorizer()
-        self.svd    = TruncatedSVD(n_components=n_components, random_state=42)
-        self.fitted = False
-
-    def fit(self, texts: list[str]) -> np.ndarray:
-        """Fit on the full corpus, return normalised LSA matrix."""
-        matrix      = self.tfidf.fit_transform(texts)
-        lsa         = self.svd.fit_transform(matrix)
-        self.fitted = True
-        explained   = self.svd.explained_variance_ratio_.sum()
-        print(f"  LSA refit: {len(texts)} memories, "
-              f"{matrix.shape[1]} terms, "
-              f"{self.n_components} components, "
-              f"{explained:.1%} variance explained")
-        return normalize(lsa)
-
-    def transform(self, texts: list[str]) -> np.ndarray:
-        """Project new texts into the fitted LSA space."""
-        if not self.fitted:
-            raise RuntimeError("Model not fitted — call fit() first")
-        return normalize(self.svd.transform(self.tfidf.transform(texts)))
-
-# ---------------------------------------------------------------------------
-# MemoryPalace
-# ---------------------------------------------------------------------------
 
 class LatentMind:
-    def __init__(self, latentmind_dir: Path = LATENTMIND_DIR):
+    def __init__(self, latentmind_dir: Path = LATENTMIND_DIR, model: LSAModel | None = None):
         self.latentmind_dir = latentmind_dir
         self.collection = get_chroma_collection(latentmind_dir / "chroma")
-        self.model      = LSAModel()
+        self.model      = model if model is not None else LSAModel()
         self._refit_if_needed()
 
     # --- internal -----------------------------------------------------------
@@ -69,7 +21,7 @@ class LatentMind:
 
     def _refit_if_needed(self):
         ids, texts = self._all()
-        if not texts:
+        if len(texts) <= self.model.n_components:
             return
         vectors = self.model.fit(texts)
         self.collection.update(ids=ids, embeddings=vectors.tolist())
@@ -90,7 +42,7 @@ class LatentMind:
         )
 
         new_total = len(texts) + 1
-        if new_total % REFIT_EVERY == 0:
+        if new_total % self.model.refit_every == 0:
             self._refit_if_needed()
         elif self.model.fitted:
             vec = self.model.transform([text])[0]
@@ -125,7 +77,6 @@ class LatentMind:
             n_results=min(top_n, self.collection.count()),
         )
 
-        # ChromaDB returns cosine distance (0=identical) — convert to similarity
         scores = [round(1 - d, 3) for d in result["distances"][0]]
         texts  = result["documents"][0]
         return list(zip(scores, texts))
@@ -133,13 +84,21 @@ class LatentMind:
     def count(self) -> int:
         return self.collection.count()
 
+    def recent(self, n: int = 5) -> list[str]:
+        """Return the n most recently added memories."""
+        total = self.collection.count()
+        if total == 0:
+            return []
+        offset = max(0, total - n)
+        result = self.collection.get(limit=n, offset=offset)
+        return result["documents"] or []
+
     def session_start_consolidation(self):
         """
-        Call this at the start of every Claude Code session.
+        Call at the start of every Claude Code session.
         Refits LSA on the full corpus so memories added during
         the previous session get properly integrated.
         """
         print("Session start: consolidating memories...")
         self._refit_if_needed()
         print(f"Ready — {self.count()} memories in the mind.\n")
-

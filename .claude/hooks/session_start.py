@@ -9,7 +9,6 @@ Fires at the start of every Claude Code session.
 Receives JSON on stdin:
   {
     "session_id": "...",
-    "cwd": "/path/to/project",
     "hook_event_name": "SessionStart"
   }
 
@@ -21,37 +20,27 @@ Returns JSON on stdout:
 
 import json
 import sys
-from pathlib import Path
 
 
 def main():
-    raw = json.load(sys.stdin)
-    cwd = raw.get("cwd", ".")
+    json.load(sys.stdin)  # consume stdin (required by hook protocol)
 
-    sys.path.insert(0, cwd)
     try:
         from latentmind import LatentMind
     except ImportError:
         sys.exit(0)
 
-    mind = LatentMind(Path(cwd) / ".latentmind")
-
-    # Consolidate — refit LSA on everything accumulated so far
+    mind = LatentMind()
     mind.session_start_consolidation()
 
     count = mind.count()
-
     if count == 0:
         sys.exit(0)
 
-    # Return a short context blurb so Claude knows it can search memories
     context = (
         f"LatentMind memory system is active with {count} memories. "
-        f"You can search past context by calling the search() method "
-        f"in latentmind.py, or ask the user if they'd like to recall "
-        f"something specific from previous sessions."
+        f"You can recall relevant context by searching memories in latentmind.py."
     )
-
     json.dump({"additionalContext": context}, sys.stdout)
     sys.exit(0)
 

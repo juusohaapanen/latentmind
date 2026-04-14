@@ -1,10 +1,40 @@
-# Python-generated files
+# Python
 __pycache__/
 *.py[oc]
 build/
 dist/
 wheels/
-*.egg-info
+*.egg-info/
 
 # Virtual environments
-.venv
+.venv/
+
+# uv
+uv.lock
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# macOS
+.DS_Store
+
+# Secrets / env
+.env
+.env.*
+*.pem
+*.key
+
+# Benchmark outputs (can be large)
+results.jsonl
+results_*.jsonl
+
+# Dataset cache (large, re-downloadable)
+~/.cache/latentmind/
+
+# LatentMind data directory
+.latentmind/
+
+# Test cache
+.pytest_cache/
