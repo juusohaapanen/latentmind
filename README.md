@@ -1,18 +1,43 @@
 # LatentMind
 
-Semantic long-term memory for Claude Code. Every conversation is automatically stored and searchable across sessions using Latent Semantic Analysis (LSA) — no external embedding API required. 
+Semantic long-term memory for Claude Code. Every conversation is automatically stored and searchable across sessions using Latent Semantic Analysis (LSA). No external embedding API required. 
 
-## Motivation and architecture
+## Introduction
 
 Large language models suffer from early dementia: they can’t accurately remember what you’ve discussed with them, causing wrong answers and bad results for tasks they are doing. For example, in software development, they can forget important development and architecture decisions. For many agentic tasks, LLM requires proper knowledge and context. 
 
-This is an experimental project to explore whether traditional or antique text-mining and information-retrieval methods can serve as a memory for AI agents. 
+This is an experimental project to explore whether traditional text-mining and information-retrieval methods can serve as a memory for AI agents. Apparently, traditional methods work pretty well. 
 
 The system is built on two technologies: LSA (Latent Semantic Analysis), which handles all the math, and a storage layer built with ChromaDB. 
 
-The key design decision: ChromaDB handles persistence and ANN search; LSA handles semantics. ChromaDB's own embedding model is bypassed and LatentMind injects its own vectors.
+The key design decision: ChromaDB handles persistence and ANN search; LSA handles semantics. ChromaDB's own embedding model is bypassed, and LatentMind injects its own vectors.
 
 Refitting is necessary because LSA is a global decomposition — when new documents arrive, the latent space shifts. Every refit_every document, the model is retrained, and all stored vectors are updated in-place.
+
+
+
+## Latent Semantic Analysis
+
+Latent Semantic Analysis (LSA) is a method to extract information from large language corpora using matrix algebra. The underlying idea (according to Landauer et al.) is “that the aggregate of all the word contexts in which a given word does and does not appear provides a set of mutual constraints that largely determines the similarity of meaning of words”. (Landauer, Foltz & Laham, 1998) This means, in practice, that textual corpora are presented as a term-document matrix, and singular value decomposition is performed to extract latent meanings of words from the data. For example, the model would learn that the terms “car” and “vehicle” mean the same. This is a very useful feature for information retrieval. 
+
+Unlike modern transformer-based models, LSA doesn’t care about word order, which is elegantly solved in transformer architectures using positional encoding. But for AI memory, it doesn't seem to be a particularly important feature: the model can still find relevant entries in memory.
+
+The biggest challenge with LSA, especially on the LongMemEval benchmark, is that there aren’t enough documents for the model to learn from. 
+
+
+## Does it work?
+
+Yes. The system was evaluated with the LongMemEval benchmark. Without neural networks or an external API for indexing, it achieved 95.7% accuracy and an overall end-to-end accuracy of 53.8%.
+
+| Question Type | R@5 | A@5 | R@10 | A@10 | n |
+|---|---|---|---|---|---|
+| knowledge-update | 64.1% | 79.5% | 70.5% | 83.3% | 78 |
+| multi-session | 19.5% | 38.3% | 31.6% | 44.4% | 133 |
+| single-session-assistant | 17.9% | 37.5% | 19.6% | 35.7% | 56 |
+| single-session-preference | 0.0% | 50.0% | 0.0% | 46.7% | 30 |
+| single-session-user | 80.0% | 95.7% | 81.4% | 94.3% | 70 |
+| temporal-reasoning | 21.1% | 30.8% | 24.8% | 33.8% | 133 |
+| **OVERALL** | **34.0%** | **51.4%** | **39.6%** | **53.8%** | **500** |
 
 
 ## How it works
